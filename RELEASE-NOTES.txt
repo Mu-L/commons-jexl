@@ -1,6 +1,6 @@
 
                             Apache Commons JEXL
-                                Version 3.2
+                               Version 3.2.1
                                Release Notes
 
 
@@ -18,6 +18,21 @@ Its goal is to expose scripting features usable by technical operatives or consu
 
   https://commons.apache.org/jexl/
 
+========================================================================================================================
+Release 3.2.1
+========================================================================================================================
+
+Version 3.2.1 is a maintenance release.
+
+Compatibility with previous releases
+====================================
+Version 3.2.1 is source and binary compatible with 3.2.
+
+Bugs Fixed in 3.2.1:
+==================
+* JEXL-352:      Possible memory leak regarding parser jjtree nodes in JEXL 3.2
+* JEXL-351:      JXLT Template fails when using sandboxing
+* JEXL-350:      map[null] throws "unsolvable property" when a Sandbox is used
 
 ========================================================================================================================
 Release 3.2
@@ -78,6 +93,10 @@ New Features in 3.2:
 
 Bugs Fixed in 3.2:
 ==================
+* JEXL-349:      Script valid in 3.0 no longer valid
+* JEXL-348:      Parsing error when mixing namespaces with conditional expressions
+* JEXL-347:      Missing unsolvable property exception for reference when used with equals
+* JEXL-346:      namespace function syntax leads to strange error for "common case" of ternary operator
 * JEXL-336:      Escape some control characters
 * JEXL-331:      Please document \uXXXX escape sequence
 * JEXL-330:      JexlException.Parsing.getMessage() throws exception when parse error is in long expression

@@ -16,7 +16,9 @@
  */
 package org.apache.commons.jexl3.parser;
 
+import org.apache.commons.jexl3.JexlException;
 import org.apache.commons.jexl3.JexlInfo;
+import org.apache.commons.jexl3.internal.ScriptVisitor;
 import org.apache.commons.jexl3.introspection.JexlMethod;
 import org.apache.commons.jexl3.introspection.JexlPropertyGet;
 import org.apache.commons.jexl3.introspection.JexlPropertySet;
@@ -83,7 +85,7 @@ public abstract class JexlNode extends SimpleNode {
             final int c = lc & 0xfff;
             final int l = lc >> 0xc;
             // at least an info with line/column number
-            return info != null? info.at(l, c) : new JexlInfo(null, l, c);
+            return info != null? info.at(info.getLine() + l - 1, c) : new JexlInfo(null, l, c);
         }
         // weird though; no jjSetFirstToken(...) ever called?
         return info;
@@ -111,6 +113,26 @@ public abstract class JexlNode extends SimpleNode {
         for (int n = 0; n < jjtGetNumChildren(); ++n) {
             jjtGetChild(n).clearCache();
         }
+    }
+
+    /**
+     * Checks whether this node is an operator.
+     *
+     * @return true if node is an operator node, false otherwise
+     */
+    public boolean isOperator() {
+        return OperatorController.INSTANCE.control(this, Boolean.TRUE);
+    }
+
+    /**
+     * Checks whether this node is an operator that accepts a null argument
+     * even when arithmetic is in strict mode.
+     * The sole cases are equals and not equals.
+     *
+     * @return true if node accepts null arguments, false otherwise
+     */
+    public boolean isStrictOperator() {
+        return OperatorController.INSTANCE.control(this, Boolean.FALSE);
     }
 
     /**
@@ -248,7 +270,7 @@ public abstract class JexlNode extends SimpleNode {
     /**
      * Check if a null evaluated expression is protected by a ternary expression.
      * <p>
-     * The rationale is that the ternary / elvis expressions are meant for the user to explictly take control
+     * The rationale is that the ternary / elvis expressions are meant for the user to explicitly take control
      * over the error generation; ie, ternaries can return null even if the engine in strict mode
      * would normally throw an exception.
      * </p>
@@ -259,9 +281,7 @@ public abstract class JexlNode extends SimpleNode {
         for (JexlNode walk = node.jjtGetParent(); walk != null; walk = walk.jjtGetParent()) {
             // protect only the condition part of the ternary
             if (walk instanceof ASTTernaryNode
-                || walk instanceof ASTNullpNode
-                || walk instanceof ASTEQNode
-                || walk instanceof ASTNENode) {
+                || walk instanceof ASTNullpNode) {
                 return node == walk.jjtGetChild(0);
             }
             if (!(walk instanceof ASTReference || walk instanceof ASTArrayAccess)) {

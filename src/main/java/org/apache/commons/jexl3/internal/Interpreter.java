@@ -368,9 +368,7 @@ public class Interpreter extends InterpreterBase {
         final Object right = node.jjtGetChild(1).jjtAccept(this, data);
         try {
             final Object result = operators.tryOverload(node, JexlOperator.EQ, left, right);
-            return result != JexlEngine.TRY_FAILED
-                   ? result
-                   : arithmetic.equals(left, right) ? Boolean.TRUE : Boolean.FALSE;
+            return result != JexlEngine.TRY_FAILED ? result : arithmetic.equals(left, right);
         } catch (final ArithmeticException xrt) {
             throw new JexlException(node, "== error", xrt);
         }
@@ -383,8 +381,8 @@ public class Interpreter extends InterpreterBase {
         try {
             final Object result = operators.tryOverload(node, JexlOperator.EQ, left, right);
             return result != JexlEngine.TRY_FAILED
-                   ? arithmetic.toBoolean(result) ? Boolean.FALSE : Boolean.TRUE
-                   : arithmetic.equals(left, right) ? Boolean.FALSE : Boolean.TRUE;
+                   ? !arithmetic.toBoolean(result)
+                   : !arithmetic.equals(left, right);
         } catch (final ArithmeticException xrt) {
             final JexlNode xnode = findNullOperand(xrt, node, left, right);
             throw new JexlException(xnode, "!= error", xrt);
@@ -399,7 +397,7 @@ public class Interpreter extends InterpreterBase {
             final Object result = operators.tryOverload(node, JexlOperator.GTE, left, right);
             return result != JexlEngine.TRY_FAILED
                    ? result
-                   : arithmetic.greaterThanOrEqual(left, right) ? Boolean.TRUE : Boolean.FALSE;
+                   : arithmetic.greaterThanOrEqual(left, right);
         } catch (final ArithmeticException xrt) {
             throw new JexlException(node, ">= error", xrt);
         }
@@ -413,7 +411,7 @@ public class Interpreter extends InterpreterBase {
             final Object result = operators.tryOverload(node, JexlOperator.GT, left, right);
             return result != JexlEngine.TRY_FAILED
                    ? result
-                   : arithmetic.greaterThan(left, right) ? Boolean.TRUE : Boolean.FALSE;
+                   : arithmetic.greaterThan(left, right);
         } catch (final ArithmeticException xrt) {
             throw new JexlException(node, "> error", xrt);
         }
@@ -427,7 +425,7 @@ public class Interpreter extends InterpreterBase {
             final Object result = operators.tryOverload(node, JexlOperator.LTE, left, right);
             return result != JexlEngine.TRY_FAILED
                    ? result
-                   : arithmetic.lessThanOrEqual(left, right) ? Boolean.TRUE : Boolean.FALSE;
+                   : arithmetic.lessThanOrEqual(left, right);
         } catch (final ArithmeticException xrt) {
             throw new JexlException(node, "<= error", xrt);
         }
@@ -441,7 +439,7 @@ public class Interpreter extends InterpreterBase {
             final Object result = operators.tryOverload(node, JexlOperator.LT, left, right);
             return result != JexlEngine.TRY_FAILED
                    ? result
-                   : arithmetic.lessThan(left, right) ? Boolean.TRUE : Boolean.FALSE;
+                   : arithmetic.lessThan(left, right);
         } catch (final ArithmeticException xrt) {
             throw new JexlException(node, "< error", xrt);
         }
@@ -451,42 +449,42 @@ public class Interpreter extends InterpreterBase {
     protected Object visit(final ASTSWNode node, final Object data) {
         final Object left = node.jjtGetChild(0).jjtAccept(this, data);
         final Object right = node.jjtGetChild(1).jjtAccept(this, data);
-        return operators.startsWith(node, "^=", left, right) ? Boolean.TRUE : Boolean.FALSE;
+        return operators.startsWith(node, "^=", left, right);
     }
 
     @Override
     protected Object visit(final ASTNSWNode node, final Object data) {
         final Object left = node.jjtGetChild(0).jjtAccept(this, data);
         final Object right = node.jjtGetChild(1).jjtAccept(this, data);
-        return operators.startsWith(node, "^!", left, right) ? Boolean.FALSE : Boolean.TRUE;
+        return !operators.startsWith(node, "^!", left, right);
     }
 
     @Override
     protected Object visit(final ASTEWNode node, final Object data) {
         final Object left = node.jjtGetChild(0).jjtAccept(this, data);
         final Object right = node.jjtGetChild(1).jjtAccept(this, data);
-        return operators.endsWith(node, "$=", left, right) ? Boolean.TRUE : Boolean.FALSE;
+        return operators.endsWith(node, "$=", left, right);
     }
 
     @Override
     protected Object visit(final ASTNEWNode node, final Object data) {
         final Object left = node.jjtGetChild(0).jjtAccept(this, data);
         final Object right = node.jjtGetChild(1).jjtAccept(this, data);
-        return operators.endsWith(node, "$!", left, right) ? Boolean.FALSE : Boolean.TRUE;
+        return !operators.endsWith(node, "$!", left, right);
     }
 
     @Override
     protected Object visit(final ASTERNode node, final Object data) {
         final Object left = node.jjtGetChild(0).jjtAccept(this, data);
         final Object right = node.jjtGetChild(1).jjtAccept(this, data);
-        return operators.contains(node, "=~", right, left) ? Boolean.TRUE : Boolean.FALSE;
+        return operators.contains(node, "=~", right, left);
     }
 
     @Override
     protected Object visit(final ASTNRNode node, final Object data) {
         final Object left = node.jjtGetChild(0).jjtAccept(this, data);
         final Object right = node.jjtGetChild(1).jjtAccept(this, data);
-        return operators.contains(node, "!~", right, left) ? Boolean.FALSE : Boolean.TRUE;
+        return !operators.contains(node, "!~", right, left);
     }
 
     @Override
@@ -701,7 +699,7 @@ public class Interpreter extends InterpreterBase {
                     int cnt = 0;
                     while (itemsIterator.hasNext()) {
                         cancelCheck(node);
-                        // reset loop varaible
+                        // reset loop variable
                         if (lexical && cnt++ > 0) {
                             // clean up but remain current
                             block.pop();
@@ -1226,12 +1224,11 @@ public class Interpreter extends InterpreterBase {
                 }
                 final String aname = ant != null ? ant.toString() : "?";
                 final boolean defined = isVariableDefined(frame, block, aname);
-                if (defined && !arithmetic.isStrict()) {
+                // defined but null; arg of a strict operator?
+                if (defined && (!arithmetic.isStrict() || !node.jjtGetParent().isStrictOperator())) {
                     return null;
                 }
-                if (!defined || !(node.jjtGetParent() instanceof ASTJexlScript)) {
-                    return unsolvableVariable(node, aname, !defined);
-                }
+                return unsolvableVariable(node, aname, !defined);
             }
         }
         return object;
@@ -1569,7 +1566,7 @@ public class Interpreter extends InterpreterBase {
                     functor = context.get(methodName);
                     isavar = functor != null;
                 }
-                // name is a variable, cant be cached
+                // name is a variable, can't be cached
                 cacheable &= !isavar;
             }
         } else if (functor instanceof ASTIdentifierAccess) {
@@ -1686,10 +1683,8 @@ public class Interpreter extends InterpreterBase {
                 narrow = true;
                 // continue;
             }
-            // we have either evaluated and returned or no method was found
-            return node.isSafeLhs(isSafe())
-                    ? null
-                    : unsolvableMethod(node, methodName, argv);
+        } catch (JexlException.Method xmethod) {
+            // ignore and handle at end; treat as an inner discover that fails
         } catch (final JexlException.TryFailed xany) {
             throw invocationException(node, methodName, xany);
         } catch (final JexlException xthru) {
@@ -1697,6 +1692,10 @@ public class Interpreter extends InterpreterBase {
         } catch (final Exception xany) {
             throw invocationException(node, methodName, xany);
         }
+        // we have either evaluated and returned or no method was found
+        return node.isSafeLhs(isSafe())
+                ? null
+                : unsolvableMethod(node, methodName, argv);
     }
 
     @Override

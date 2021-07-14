@@ -40,12 +40,12 @@ import org.apache.commons.jexl3.parser.ASTNumberLiteral;
 import org.apache.commons.jexl3.parser.ASTStringLiteral;
 import org.apache.commons.jexl3.parser.JexlNode;
 import org.apache.commons.jexl3.parser.Parser;
+import org.apache.commons.jexl3.parser.StringProvider;
 
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import java.io.StringReader;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -55,6 +55,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Predicate;
 
 /**
  * A JexlEngine implementation.
@@ -148,7 +149,7 @@ public class Engine extends JexlEngine {
      * The {@link Parser}; when parsing expressions, this engine uses the parser if it
      * is not already in use otherwise it will create a new temporary one.
      */
-    protected final Parser parser = new Parser(new StringReader(";")); //$NON-NLS-1$
+    protected final Parser parser = new Parser(new StringProvider(";")); //$NON-NLS-1$
     /**
      * The expression max length to hit the cache.
      */
@@ -209,11 +210,16 @@ public class Engine extends JexlEngine {
         options.setMathContext(arithmetic.getMathContext());
         options.setMathScale(arithmetic.getMathScale());
         options.setStrictArithmetic(arithmetic.isStrict());
-        this.functions = conf.namespaces() == null ? Collections.<String, Object>emptyMap() : conf.namespaces();
+        this.functions = conf.namespaces() == null ? Collections.emptyMap() : conf.namespaces();
         // parsing & features:
         final JexlFeatures features = conf.features() == null? DEFAULT_FEATURES : conf.features();
-        this.expressionFeatures = new JexlFeatures(features).script(false);
-        this.scriptFeatures = new JexlFeatures(features).script(true);
+        Predicate<String> nsTest = features.namespaceTest();
+        final Set<String> nsNames = functions.keySet();
+        if (!nsNames.isEmpty()) {
+            nsTest = nsTest == JexlFeatures.TEST_STR_FALSE ?nsNames::contains : nsTest.or(nsNames::contains);
+        }
+        this.expressionFeatures = new JexlFeatures(features).script(false).namespaceTest(nsTest);
+        this.scriptFeatures = new JexlFeatures(features).script(true).namespaceTest(nsTest);
         this.charset = conf.charset();
         // caching:
         this.cache = conf.cache() <= 0 ? null : new SoftCache<Source, ASTJexlScript>(conf.cache());
@@ -462,7 +468,7 @@ public class Engine extends JexlEngine {
     }
 
     @Override
-    public Script createScript(final JexlFeatures features, final JexlInfo info, final String scriptText, final String[] names) {
+    public Script createScript(final JexlFeatures features, final JexlInfo info, final String scriptText, final String... names) {
         if (scriptText == null) {
             throw new NullPointerException("source is null");
         }
@@ -495,7 +501,7 @@ public class Engine extends JexlEngine {
         if (context == null) {
             context = EMPTY_CONTEXT;
         }
-        // synthetize expr using register
+        // synthesize expr using register
         String src = trimSource(expr);
         src = "#0" + (src.charAt(0) == '[' ? "" : ".") + src;
         try {
@@ -524,7 +530,7 @@ public class Engine extends JexlEngine {
         if (context == null) {
             context = EMPTY_CONTEXT;
         }
-        // synthetize expr using register
+        // synthesize expr using register
         String src = trimSource(expr);
         src = "#0" + (src.charAt(0) == '[' ? "" : ".") + src + "=" + "#1";
         try {
@@ -840,7 +846,10 @@ public class Engine extends JexlEngine {
      */
     protected ASTJexlScript parse(final JexlInfo info, final JexlFeatures parsingf, final String src, final Scope scope) {
         final boolean cached = src.length() < cacheThreshold && cache != null;
-        final JexlFeatures features = parsingf != null? parsingf : DEFAULT_FEATURES;
+        JexlFeatures features = parsingf != null? parsingf : DEFAULT_FEATURES;
+       // if (features.getNameSpaces().isEmpty() && !functions.isEmpty()) {
+       //     features = new JexlFeatures(features).nameSpaces(functions.keySet());
+       // }
         final Source source = cached? new Source(features, src) : null;
         ASTJexlScript script = null;
         if (source != null) {
@@ -864,7 +873,7 @@ public class Engine extends JexlEngine {
             }
         } else {
             // ...otherwise parser was in use, create a new temporary one
-            final Parser lparser = new Parser(new StringReader(";"));
+            final Parser lparser = new Parser(new StringProvider(";"));
             script = lparser.parse(ninfo, features, src, scope);
         }
         if (source != null) {

@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 /**
  * A set of language feature options.
@@ -50,6 +51,10 @@ public final class JexlFeatures {
     private long flags;
     /** The set of reserved names, aka global variables that can not be masked by local variables or parameters. */
     private Set<String> reservedNames;
+    /** The namespace names. */
+    private Predicate<String> nameSpaces;
+    /** The false predicate. */
+    public static final Predicate<String> TEST_STR_FALSE = (s)->false;
     /** Te feature names (for toString()). */
     private static final String[] F_NAMES = {
         "register", "reserved variable", "local variable", "assign/modify",
@@ -106,6 +111,7 @@ public final class JexlFeatures {
                 | (1L << ANNOTATION)
                 | (1L << SCRIPT);
         reservedNames = Collections.emptySet();
+        nameSpaces = TEST_STR_FALSE;
     }
 
     /**
@@ -115,6 +121,7 @@ public final class JexlFeatures {
     public JexlFeatures(final JexlFeatures features) {
         this.flags = features.flags;
         this.reservedNames = features.reservedNames;
+        this.nameSpaces = features.nameSpaces;
     }
 
     @Override
@@ -184,6 +191,23 @@ public final class JexlFeatures {
      */
     public boolean isReservedName(final String name) {
         return name != null && reservedNames.contains(name);
+    }
+
+    /**
+     * Sets a test to determine namespace declaration.
+     * @param names the name predicate
+     * @return this features instance
+     */
+    public JexlFeatures namespaceTest(final Predicate<String> names) {
+        nameSpaces = names == null? TEST_STR_FALSE : names;
+        return this;
+    }
+
+    /**
+     * @return the declared namespaces test.
+     */
+    public Predicate<String> namespaceTest() {
+        return nameSpaces;
     }
 
     /**

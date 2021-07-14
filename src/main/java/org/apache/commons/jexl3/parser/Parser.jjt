@@ -20,6 +20,7 @@ options
 {
    MULTI=true;
    STATIC=false;
+   JAVA_TEMPLATE_TYPE="modern";
    VISITOR=true;
    NODE_SCOPE_HOOK=true;
    NODE_CLASS="JexlNode";
@@ -28,7 +29,7 @@ options
    TRACK_TOKENS=true;
    CACHE_TOKENS=true;
    ERROR_REPORTING=false;
-   //DEBUG_PARSER=true;
+  // DEBUG_PARSER=true;
    //DEBUG_TOKEN_MANAGER=true;
 }
 
@@ -59,15 +60,15 @@ public final class Parser extends JexlParser
             source = jexlSrc;
             pragmas = null;
             frame = scope;
-            ReInit(new java.io.StringReader(jexlSrc));
+            ReInit(jexlSrc);
             ASTJexlScript script = jexlFeatures.supportsScript()? JexlScript(scope) : JexlExpression(scope);
             script.jjtSetValue(info.detach());
             script.setFeatures(jexlFeatures);
             script.setPragmas(pragmas != null
-                             ? Collections.<String,Object>unmodifiableMap(pragmas)
-                             : Collections.<String,Object>emptyMap());
+                             ? Collections.unmodifiableMap(pragmas)
+                             : Collections.emptyMap());
             return script;
-        } catch (TokenMgrError xtme) {
+        } catch (TokenMgrException xtme) {
             throw new JexlException.Tokenization(info, xtme).clean();
         } catch (ParseException xparse) {
             Token errortok = errorToken(jj_lastpos, jj_scanpos, token.next, token);
@@ -75,6 +76,7 @@ public final class Parser extends JexlParser
         } finally {
             token_source.defaultLexState = DEFAULT;
             cleanup(previous);
+            jjtree.reset();
         }
     }
 }
@@ -302,7 +304,7 @@ ASTJexlScript JexlScript(Scope frame) : {
    {
         pushUnit(jjtThis);
    }
-        ( ( Statement() )*) <EOF>
+        (Statement())* <EOF>
    {
         popUnit(jjtThis);
         return jjtThis.script();
@@ -312,7 +314,7 @@ ASTJexlScript JexlScript(Scope frame) : {
 ASTJexlScript JexlExpression(Scope frame) #JexlScript : {
     jjtThis.setScope(frame);
 }
-{   
+{
    {
         pushUnit(jjtThis);
    }
@@ -331,7 +333,7 @@ void Annotation() #Annotation :
     t=<ANNOTATION> (LOOKAHEAD(<LPAREN>) Arguments() )? { jjtThis.setName(t.image); }
 }
 
-void AnnotatedStatement() #AnnotatedStatement() : {}
+void AnnotatedStatement() #AnnotatedStatement : {}
  {
     (LOOKAHEAD(<ANNOTATION>) Annotation())+ (LOOKAHEAD(1) Block() | Statement())
  }
@@ -350,7 +352,7 @@ void Statement() #void : {}
     | Continue()
     | Break()
     | Var()
-    | Pragma() 
+    | Pragma()
 }
 
 void Block() #Block : {}
@@ -453,16 +455,22 @@ Object pragmaValue() #void :
 {
 Token v;
 LinkedList<String> lstr = new LinkedList<String>();
+Object result;
 }
 {
-      LOOKAHEAD(1) v=<INTEGER_LITERAL> { return NumberParser.parseInteger(v.image); }
-    | LOOKAHEAD(1) v=<FLOAT_LITERAL> { return NumberParser.parseDouble(v.image); }
-    | LOOKAHEAD(1) v=<STRING_LITERAL> { return Parser.buildString(v.image, true); }
-    | LOOKAHEAD(1)  pragmaKey(lstr) { return stringify(lstr); }
-    | LOOKAHEAD(1) <TRUE> { return true; }
-    | LOOKAHEAD(1) <FALSE> { return false; }
-    | LOOKAHEAD(1) <NULL> { return null; }
-    | LOOKAHEAD(1) <NAN_LITERAL> { return Double.NaN; }
+  (
+      LOOKAHEAD(1) v=<INTEGER_LITERAL> { result = NumberParser.parseInteger(v.image); }
+    | LOOKAHEAD(1) v=<FLOAT_LITERAL> { result = NumberParser.parseDouble(v.image); }
+    | LOOKAHEAD(1) v=<STRING_LITERAL> { result = Parser.buildString(v.image, true); }
+    | LOOKAHEAD(1)  pragmaKey(lstr) { result = stringify(lstr); }
+    | LOOKAHEAD(1) <TRUE> { result = true; }
+    | LOOKAHEAD(1) <FALSE> { result = false; }
+    | LOOKAHEAD(1) <NULL> { result = null; }
+    | LOOKAHEAD(1) <NAN_LITERAL> { result = Double.NaN; }
+  )
+  {
+    return result;
+  }
 }
 
 
@@ -508,7 +516,7 @@ void ConditionalExpression() #void : {}
   ConditionalOrExpression()
   (
     <QMARK> Expression() <COLON> Expression() #TernaryNode(3)
-  |
+     |
     <ELVIS> Expression() #TernaryNode(2)
   |
     <NULLP> Expression() #NullpNode(2)
@@ -647,15 +655,7 @@ void NamespaceIdentifier()  #NamespaceIdentifier :
     Token id;
 }
 {
-    ns=<IDENTIFIER> <COLON> id=<IDENTIFIER> { jjtThis.setNamespace(ns.image, id.image); }
-}
-
-void StringIdentifier() #Identifier :
-{
-    Token t;
-}
-{
-    t=<STRING_LITERAL>  { jjtThis.setSymbol(Parser.buildString(t.image, true));  }
+   ns=<IDENTIFIER> <COLON> id=<IDENTIFIER> { jjtThis.setNamespace(ns.image, id.image); }
 }
 
 void Literal() #void :
@@ -747,7 +747,7 @@ void RegexLiteral() :
 }
 
 
-void ExtendedLiteral() #ExtendedLiteral() : {}
+void ExtendedLiteral() #ExtendedLiteral : {}
 {
    <ELIPSIS>
 }
@@ -795,7 +795,7 @@ void Arguments() #Arguments : {}
 
 void FunctionCallLookahead() #void : {}
 {
-    LOOKAHEAD(2) <IDENTIFIER> <COLON> <IDENTIFIER> <LPAREN>
+    LOOKAHEAD(<IDENTIFIER> <COLON> <IDENTIFIER> <LPAREN>,  { isDeclaredNamespace(getToken(1), getToken(2)) }) <IDENTIFIER> <COLON> <IDENTIFIER> <LPAREN>
     |
     LOOKAHEAD(2) <IDENTIFIER> <LPAREN>
     |
@@ -804,12 +804,12 @@ void FunctionCallLookahead() #void : {}
 
 void FunctionCall() #void : {}
 {
-      LOOKAHEAD(2) NamespaceIdentifier() Arguments() #FunctionNode(2)
+    LOOKAHEAD(<IDENTIFIER> <COLON> <IDENTIFIER> <LPAREN>,  { isDeclaredNamespace(getToken(1), getToken(2)) })  NamespaceIdentifier() Arguments() #FunctionNode(2)
     |
-      LOOKAHEAD(2) Identifier(true) Arguments() #FunctionNode(2)
+    LOOKAHEAD(<IDENTIFIER> <LPAREN>) Identifier(true) Arguments() #FunctionNode(2)
 }
 
-void Constructor() #ConstructorNode() : {}
+void Constructor() #ConstructorNode : {}
 {
   <NEW> <LPAREN> Expression() ( <COMMA> Expression() )* <RPAREN>
 }
@@ -828,7 +828,7 @@ void Parameters() #void : {}
 }
 
 
-void LambdaLookahead() #void() : {}
+void LambdaLookahead() #void : {}
 {
   <FUNCTION> Parameters()
   |
@@ -837,7 +837,7 @@ void LambdaLookahead() #void() : {}
   Parameter() <LAMBDA>
 }
 
-void Lambda() #JexlLambda() :
+void Lambda() #JexlLambda :
 {
    pushFrame();
 }
@@ -903,7 +903,7 @@ void MemberAccess() #void : {}
 
 void ReferenceExpression() #MethodNode(>1) : {}
 {
-    ( <LPAREN> Expression() <RPAREN> #ReferenceExpression(1) ) ( LOOKAHEAD(<LPAREN>) Arguments() )*
+    <LPAREN> Expression() <RPAREN> #ReferenceExpression(1) ( LOOKAHEAD(<LPAREN>) Arguments() )*
 }
 
 void PrimaryExpression() #void : {}

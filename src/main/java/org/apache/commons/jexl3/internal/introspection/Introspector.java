@@ -161,7 +161,7 @@ public final class Introspector {
      * @param c   Class in which the field search is taking place
      * @param key Name of the field being searched for
      * @return the desired field or null if it does not exist or is not accessible
-     * */
+     */
     public Field getField(final Class<?> c, final String key) {
         return getMap(c).getField(key);
     }
@@ -300,15 +300,15 @@ public final class Introspector {
      */
     private ClassMap getMap(final Class<?> c) {
         ClassMap classMap;
+        lock.readLock().lock();
         try {
-            lock.readLock().lock();
             classMap = classMethodMaps.get(c);
         } finally {
             lock.readLock().unlock();
         }
         if (classMap == null) {
+            lock.writeLock().lock();
             try {
-                lock.writeLock().lock();
                 // try again
                 classMap = classMethodMaps.get(c);
                 if (classMap == null) {
@@ -334,8 +334,8 @@ public final class Introspector {
             cloader = getClass().getClassLoader();
         }
         if (!cloader.equals(loader)) {
+            lock.writeLock().lock();
             try {
-                lock.writeLock().lock();
                 // clean up constructor and class maps
                 final Iterator<Map.Entry<MethodKey, Constructor<?>>> mentries = constructorsMap.entrySet().iterator();
                 while (mentries.hasNext()) {
